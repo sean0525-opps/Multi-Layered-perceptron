@@ -1,0 +1,191 @@
+import numpy as np
+import random
+ 
+def sigmoid(x): # used to calculate the activation function
+    return 1 / (1 + np.exp(-x))
+ 
+def sigmoid_derivative(x): # used to calculate the derivative of the activation
+    return x * (1 - x)
+ 
+def perameters(): # used to recieve the perameters for the neural network
+    num_samples = int(input("how many samples do you want to enter "))
+    num_inputs = int(input("how many inputs do you want to enter "))
+    num_hidden = int(input("how many hidden units do you want to enter "))
+    num_epochs = int(input("how many epochs do you want "))
+    learning_rate = float(input("what is the learning rate "))
+    return num_samples,num_inputs, num_hidden, num_epochs, learning_rate
+ 
+def data(num_samples, num_inputs):  # used to get the data (samples, input, and answer)
+    mode_selected = False
+    while not mode_selected:
+        mode = input("Which mode do you want (enter 'file' to import a CSV file, else 'manual'): ").strip().lower()
+        if mode == "file":
+            filename = input("CSV file name: ").strip()
+            try:
+                dataset = np.loadtxt(filename, delimiter=',', skiprows=1)
+            except Exception as e:
+                print(f"Error loading file: {filename}")
+            valid_dataset = True
+            for i in range(len(dataset)):
+                for j in range(len(dataset[i])):
+                    value = int(dataset[i][j])
+                    if value != 0 and value != 1:
+                        print("Error: CSV can only contain 0 or 1.")
+                        valid_dataset = False
+            if valid_dataset:
+                mode_selected = True
+                return dataset.tolist()  # convert numpy array to list
+        elif mode == "manual":
+            dataset = []
+            print(f"Type inputs and target answer (e.g., 101 or 1 0 1 for {num_inputs} inputs + 1 answer):")
+            for i in range(num_samples):
+                input_valid = False
+                while not input_valid:
+                    sample = input(f"Sample {i+1}: ").replace(" ", "")
+                    sample_array = []
+                    if sample.isdigit() and len(sample) == num_inputs + 1:
+                        all_digits_valid = True
+                        for char in sample:
+                            num = int(char)
+                            if num == 0 or num == 1:
+                                sample_array.append(num)
+                            else:
+                                all_digits_valid = False
+                        if all_digits_valid:
+                            input_valid = True
+                            dataset.append(sample_array)
+                        else:
+                            print("Error: Only use numbers (0 or 1). Try again.")
+                    else:
+                        print(f"Error: Enter {num_inputs} inputs and 1 target answer using only digits 0 or 1.")
+            mode_selected = True
+            return dataset
+ 
+        else:
+            print("Please enter a proper mode ('file' or 'manual').")
+ 
+def structure(num_inputs, dataset): # creates the structure for the neural network
+    x = []
+    y = []
+    for i in range(len(dataset)):
+        tempx = []
+        tempy = []
+        for j in range(len(dataset[i])): # used to seperate input and answer
+            if j < num_inputs:
+                tempx.append(dataset[i][j])
+            else:
+                tempy.append(dataset[i][j])
+        x.append(tempx)
+        y.append(tempy)
+    return x,y
+ 
+def initialise(num_inputs, num_hidden): # gets the weight of the edges
+    w_in_hidden = []
+    w_out_hidden = []
+    for j in range(num_hidden): # initialise weights as small random values
+        hidden_weights = []  # create a list to hold weights for this hidden neuron
+        for i in range(num_inputs):  # for each input neuron
+            hidden_weights.append(random.random())  # generate random weight
+        w_in_hidden.append(hidden_weights)  # add hidden neuron’s weights to the network
+ 
+    for j in range(num_hidden):
+        w_out_hidden.append(random.random()) # hidden→output
+    return w_in_hidden, w_out_hidden
+
+def output(num_inputs, num_hidden, x, w_in_hidden, w_out_hidden, num_samples): # used to produce the goal
+    h_input = []  # stores hidden layer activations
+    outputs = []  # stores output layer activations
+    for i in range(num_samples):  # for each training sample
+        total_hidden = []  # holds weighted sums for hidden layer
+        for j in range(num_hidden):  # for each hidden neuron
+            total = 0
+            for k in range(num_inputs):  # for each input neuron
+                total += x[i][k] * w_in_hidden[j][k]
+            total_hidden.append(sigmoid(total))
+        h_input.append(total_hidden)
+        sum_output = 0 # Compute output layer activation
+        for j in range(num_hidden):
+            sum_output += total_hidden[j] * w_out_hidden[j]
+        outputs.append(sigmoid(sum_output))
+    return outputs, h_input
+ 
+def weightupdate(x, y, outputs, h_input, w_in_hidden, w_out_hidden, learning_rate): # used to update the weights
+    num_samples = len(x)
+    num_inputs = len(x[0])
+    num_hidden = len(w_in_hidden)
+    for i in range(num_samples):
+        y_hat = outputs[i]
+        y_true = y[i][0]
+        error = y_true - y_hat # output error
+        d_output = error * sigmoid_derivative(y_hat)        
+        for j in range(num_hidden): # update hidden to output weights
+            w_out_hidden[j] += learning_rate * d_output * h_input[i][j]
+        for j in range(num_hidden): # hidden layer error
+            d_hidden = d_output * w_out_hidden[j] * sigmoid_derivative(h_input[i][j])
+            for k in range(num_inputs):
+                w_in_hidden[j][k] += learning_rate * d_hidden * x[i][k]
+ 
+    return w_in_hidden, w_out_hidden
+ 
+def cycles(num_epochs, num_inputs, num_hidden, x, w_in_hidden, w_out_hidden, learning_rate, y, num_samples): # repeatedly introduce one training sample at a time at the input layer
+    for cycles in range(num_epochs):
+        outputs, h_input = output(num_inputs, num_hidden, x, w_in_hidden, w_out_hidden, num_samples)
+        w_in_hidden, w_out_hidden = weightupdate(x, y, outputs, h_input, w_in_hidden, w_out_hidden, learning_rate)
+        print(f"Epoch {cycles + 1} complete.")
+    return w_in_hidden, w_out_hidden
+ 
+def display():
+    num_samples, num_inputs, num_hidden, num_epochs, learning_rate = perameters()
+    dataset = data(num_samples, num_inputs)
+    x, y = structure(num_inputs, dataset)
+    w_in_hidden, w_out_hidden = initialise(num_inputs, num_hidden)
+    final_in_hidden, final_out_hidden = cycles(num_epochs, num_inputs, num_hidden, x, w_in_hidden, w_out_hidden, learning_rate, y, num_samples)    
+    cleaned_in_hidden = [] # Clean input-to-hidden weights
+    for i in range(len(final_in_hidden)):
+        row = []
+        for j in range(len(final_in_hidden[i])):
+            row.append(round(float(final_in_hidden[i][j]), 4))
+        cleaned_in_hidden.append(row)  # moved inside the loop
+    cleaned_out_hidden = [] # Clean hidden-to-output weights
+    for i in range(len(final_out_hidden)):
+        cleaned_out_hidden.append(round(float(final_out_hidden[i]), 4))
+    print("\nTraining complete.\n")
+    print("Input to Hidden Weights:")
+
+    for j in range(num_hidden):
+        print(f"Hidden {j+1}:")
+        for k in range(num_inputs):
+            w = cleaned_in_hidden[j][k]
+            print(f"   Input {k+1}: {w}")
+    print("\nHidden to Output Weights:")
+    for j in range(len(cleaned_out_hidden)):
+        w = cleaned_out_hidden[j]
+        print(f"Hidden {j+1} to Output: {w}")
+    test(x, final_in_hidden, final_out_hidden)
+ 
+def test(x, final_in_hidden, final_out_hidden):
+    print("\nPredictions:")
+    print(" Input(s)        | Predicted Output")
+    print("----------------------------------------")
+    for inputs in x:
+        hidden_outputs = [] # Compute hidden layer activations
+        for j in range(len(final_in_hidden)):
+            total = 0
+            for k in range(len(inputs)):
+                total += inputs[k] * final_in_hidden[j][k]
+            hidden_outputs.append(sigmoid(total))
+        output_sum = 0 # Compute final output
+        for j in range(len(hidden_outputs)):
+            output_sum += hidden_outputs[j] * final_out_hidden[j]
+        y_pred = sigmoid(output_sum)
+        formatted_inputs = []
+        for v in inputs:
+            formatted_inputs.append(int(v))
+        print(f" {formatted_inputs}     |    {round(float(y_pred), 4)}")
+
+display()
+
+
+
+
+
